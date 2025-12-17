@@ -8,59 +8,80 @@ from app.database import supabase
 
 router = APIRouter(prefix="/telegram", tags=["Telegram"])
 @router.post("/schedule")
+@router.post("/schedule")
 def create_from_telegram(data: TelegramScheduleRequest):
-    """
-    Expected text format:
-    subject start-end
-    Example: aiml 6-7
-    """
 
-    text = data.text.strip().lower()
+    try:
+        text = data.text.strip().lower()
 
-    # regex: subject + start-end
-    match = re.match(r"([a-zA-Z ]+)\s+(\d{1,2})(?::(\d{2}))?-(\d{1,2})(?::(\d{2}))?", text)
-
-    if not match:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid format. Use: subject start-end (e.g. aiml 6-7)"
+        # Parse: subject start-end
+        match = re.fullmatch(
+            r"([a-zA-Z ]+)\s+(\d{1,2})(?::(\d{2}))?-(\d{1,2})(?::(\d{2}))?",
+            text
         )
 
-    subject = match.group(1).strip()
+        if not match:
+            raise ValueError("Use format: subject start-end (e.g. aiml 6-7)")
 
-    sh = int(match.group(2))
-    sm = int(match.group(3) or 0)
-    eh = int(match.group(4))
-    em = int(match.group(5) or 0)
+        subject = match.group(1).strip()
 
-    today = datetime.now().astimezone()
-    start_time = today.replace(hour=sh, minute=sm, second=0, microsecond=0)
-    end_time = today.replace(hour=eh, minute=em, second=0, microsecond=0)
+        sh = int(match.group(2))
+        sm = int(match.group(3) or 0)
+        eh = int(match.group(4))
+        em = int(match.group(5) or 0)
 
-    if end_time <= start_time:
-        raise HTTPException(status_code=400, detail="End time must be after start time")
+        from datetime import datetime, timezone, timedelta
 
-    # get user
-    user = (
-        supabase.table("app_users")
-        .select("id")
-        .eq("telegram_id", data.telegram_id)
-        .execute()
-    )
+        now = datetime.now(timezone.utc)
 
-    if not user.data:
-        raise HTTPException(status_code=404, detail="User not found")
+        start_time = now.replace(
+            hour=sh,
+            minute=sm,
+            second=0,
+            microsecond=0
+        )
 
-    user_id = user.data[0]["id"]
+        end_time = now.replace(
+            hour=eh,
+            minute=em,
+            second=0,
+            microsecond=0
+        )
 
-    # reuse existing schedule logic
-    create_schedule(
-        user_id=user_id,
-        subject=subject,
-        start_time=start_time.isoformat(),
-        end_time=end_time.isoformat()
-    )
+        # Handle crossing midnight
+        if end_time <= start_time:
+            end_time += timedelta(days=1)
 
-    return {
-        "message": f"✅ Schedule saved\n\n{subject.upper()} {start_time.strftime('%I:%M %p')} - {end_time.strftime('%I:%M %p')}"
-    }
+        # Fetch user
+        user = (
+            supabase.table("app_users")
+            .select("id")
+            .eq("telegram_id", data.telegram_id)
+            .execute()
+        )
+
+        if not user.data:
+            raise ValueError("User not registered")
+
+        user_id = user.data[0]["id"]
+
+        # Insert schedule (reuse existing logic)
+        create_schedule(
+            user_id=user_id,
+            subject=subject,
+            start_time=start_time,
+            end_time=end_time
+        )
+
+
+        return {
+            "message": f"✅ Schedule saved\n\n{subject.upper()} "
+                       f"{start_time.strftime('%I:%M %p')} - "
+                       f"{end_time.strftime('%I:%M %p')}"
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid input: {str(e)}"
+        )

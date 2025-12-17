@@ -19,10 +19,21 @@ def get_or_create_user(telegram_id: int) -> str:
     return user.data[0]["id"]
 
 
-def create_schedule(user_id: str, subject: str, start_time, end_time):
+from datetime import datetime
+
+def create_schedule(user_id, subject, start_time, end_time):
+
+    if isinstance(start_time, datetime):
+        start_time = start_time.isoformat()
+
+    if isinstance(end_time, datetime):
+        end_time = end_time.isoformat()
+
     supabase.table("schedules").insert({
         "user_id": user_id,
         "subject": subject,
-        "start_time": start_time.isoformat(),
-        "end_time": end_time.isoformat()
+        "start_time": start_time,
+        "end_time": end_time
     }).execute()
+
+
