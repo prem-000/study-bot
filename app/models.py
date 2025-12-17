@@ -6,3 +6,7 @@ class ScheduleCreate(BaseModel):
     subject: str
     start_time: datetime
     end_time: datetime
+
+class TelegramScheduleRequest(BaseModel):
+    telegram_id: int
+    text: str
