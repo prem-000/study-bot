@@ -19,8 +19,6 @@ def get_due_reminders():
     return res.data
 
 
-from datetime import datetime, timezone
-
 def mark_reminder_sent(schedule_id: str):
     supabase.table("schedules").update({
         "reminder_sent": True,
