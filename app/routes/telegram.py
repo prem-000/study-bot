@@ -42,9 +42,20 @@ def create_from_telegram(data: TelegramScheduleRequest):
 
         # 🔑 NEXT UPCOMING TIME LOGIC
         # If start_time already passed → schedule for next day
+        # If AM/PM not specified, assume next upcoming slot
         if start_time <= now:
-            start_time += timedelta(days=1)
-            end_time += timedelta(days=1)
+            # Try PM first (add 12 hours)
+            start_time_pm = start_time + timedelta(hours=12)
+            end_time_pm = end_time + timedelta(hours=12)
+
+            if start_time_pm > now:
+                start_time = start_time_pm
+                end_time = end_time_pm
+            else:
+                # Otherwise, schedule tomorrow
+                start_time += timedelta(days=1)
+                end_time += timedelta(days=1)
+
 
         # Fetch user
         user = (
