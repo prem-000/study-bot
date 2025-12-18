@@ -33,11 +33,6 @@ def create_from_telegram(data: TelegramScheduleRequest):
     try:
         text = data.text.strip().lower()
 
-        # Supported formats:
-        # aiml 6-7
-        # aiml 6pm-7pm
-        # aiml 6:30pm - 7:45pm
-        # aiml 18-19
         match = re.fullmatch(
             r"([a-zA-Z ]+)\s+"
             r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*-\s*"
@@ -76,6 +71,10 @@ def create_from_telegram(data: TelegramScheduleRequest):
         if end_time <= start_time:
             end_time += timedelta(days=1)
 
+        # 🔴 PREVENT PAST SCHEDULES (THIS WAS MISPLACED BEFORE)
+        if start_time <= now:
+            raise ValueError("Start time must be in the future")
+
         # ---------- Fetch user ----------
         user = (
             supabase.table("app_users")
@@ -102,13 +101,13 @@ def create_from_telegram(data: TelegramScheduleRequest):
                 "📘 *STUDY SCHEDULE SAVED*\n\n"
                 "━━━━━━━━━━━━━━━━\n"
                 f"📚 *Subject* : {subject.upper()}\n"
-                f"⏰ *Time*    : {start_time.strftime('%I:%M %p')} – {end_time.strftime('%I:%M %p')}\n"
+                f"⏰ *Time*    : {start_time.strftime('%I:%M %p')} – "
+                f"{end_time.strftime('%I:%M %p')}\n"
                 "📅 *Date*    : Today\n"
                 "━━━━━━━━━━━━━━━━\n\n"
                 "🔥 Stay focused. No excuses."
             )
         }
-
 
     except Exception as e:
         raise HTTPException(
