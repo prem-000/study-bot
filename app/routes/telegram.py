@@ -1,27 +1,27 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from datetime import datetime, timedelta
 import re
+from fastapi import APIRouter, HTTPException
+from datetime import datetime, timezone, timedelta
+
 from app.models import TelegramScheduleRequest
 from app.services.schedule import create_schedule
 from app.database import supabase
 
 router = APIRouter(prefix="/telegram", tags=["Telegram"])
-@router.post("/schedule")
+
+
 @router.post("/schedule")
 def create_from_telegram(data: TelegramScheduleRequest):
-
     try:
         text = data.text.strip().lower()
 
-        # Parse: subject start-end
+        # Format: subject start-end (24h or logical next slot)
         match = re.fullmatch(
             r"([a-zA-Z ]+)\s+(\d{1,2})(?::(\d{2}))?-(\d{1,2})(?::(\d{2}))?",
             text
         )
 
         if not match:
-            raise ValueError("Use format: subject start-end (e.g. aiml 6-7)")
+            raise ValueError("Use format: subject start-end (e.g. pd 1-2 or pd 18-19)")
 
         subject = match.group(1).strip()
 
@@ -30,26 +30,20 @@ def create_from_telegram(data: TelegramScheduleRequest):
         eh = int(match.group(4))
         em = int(match.group(5) or 0)
 
-        from datetime import datetime, timezone, timedelta
-
         now = datetime.now(timezone.utc)
 
-        start_time = now.replace(
-            hour=sh,
-            minute=sm,
-            second=0,
-            microsecond=0
-        )
+        # Create tentative times (today)
+        start_time = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
+        end_time = now.replace(hour=eh, minute=em, second=0, microsecond=0)
 
-        end_time = now.replace(
-            hour=eh,
-            minute=em,
-            second=0,
-            microsecond=0
-        )
-
-        # Handle crossing midnight
+        # If end <= start, assume crossing midnight
         if end_time <= start_time:
+            end_time += timedelta(days=1)
+
+        # 🔑 NEXT UPCOMING TIME LOGIC
+        # If start_time already passed → schedule for next day
+        if start_time <= now:
+            start_time += timedelta(days=1)
             end_time += timedelta(days=1)
 
         # Fetch user
@@ -65,7 +59,7 @@ def create_from_telegram(data: TelegramScheduleRequest):
 
         user_id = user.data[0]["id"]
 
-        # Insert schedule (reuse existing logic)
+        # Store schedule
         create_schedule(
             user_id=user_id,
             subject=subject,
@@ -73,11 +67,17 @@ def create_from_telegram(data: TelegramScheduleRequest):
             end_time=end_time
         )
 
-
         return {
-            "message": f"✅ Schedule saved\n\n{subject.upper()} "
-                       f"{start_time.strftime('%I:%M %p')} - "
-                       f"{end_time.strftime('%I:%M %p')}"
+            "message": (
+                "📘 *STUDY SCHEDULE SAVED*\n\n"
+                "━━━━━━━━━━━━━━━━\n"
+                f"📚 *Subject* : {subject.upper()}\n"
+                f"⏰ *Time*    : {start_time.strftime('%I:%M %p')} – "
+                f"{end_time.strftime('%I:%M %p')}\n"
+                f"📅 *Date*    : {start_time.strftime('%d %b %Y')}\n"
+                "━━━━━━━━━━━━━━━━\n\n"
+                "🔥 Stay focused. No excuses."
+            )
         }
 
     except Exception as e:
