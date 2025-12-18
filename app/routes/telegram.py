@@ -99,12 +99,16 @@ def create_from_telegram(data: TelegramScheduleRequest):
 
         return {
             "message": (
-                "✅ Schedule saved\n\n"
-                f"{subject.upper()} "
-                f"{start_time.strftime('%I:%M %p')} - "
-                f"{end_time.strftime('%I:%M %p')}"
+                "📘 *STUDY SCHEDULE SAVED*\n\n"
+                "━━━━━━━━━━━━━━━━\n"
+                f"📚 *Subject* : {subject.upper()}\n"
+                f"⏰ *Time*    : {start_time.strftime('%I:%M %p')} – {end_time.strftime('%I:%M %p')}\n"
+                "📅 *Date*    : Today\n"
+                "━━━━━━━━━━━━━━━━\n\n"
+                "🔥 Stay focused. No excuses."
             )
         }
+
 
     except Exception as e:
         raise HTTPException(
